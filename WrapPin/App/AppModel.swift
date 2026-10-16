@@ -153,6 +153,7 @@ final class AppModel {
         if hasCompletedOnboarding {
             usageAnalytics.recordActivation(enabled: sharesAnonymousUsageStatistics)
         }
+        publishSimulationState()
     }
 
     func chooseTarget(_ target: LocationTarget) {
@@ -286,6 +287,16 @@ final class AppModel {
         reducesBackgroundLocationIndicator = enabled
         preferences.set(enabled, forKey: Self.reducesBackgroundLocationIndicatorKey)
         deviceSession.backgroundKeepAlive.setIndicatorPreferenceFromUserAction(enabled)
+    }
+
+    /// Lets Shortcuts ask whether a simulation is running.
+    private func publishSimulationState() {
+        let running: Bool
+        switch deviceSession.phase {
+        case .idle, .failed: running = false
+        default: running = true
+        }
+        ExternalActionCenter.shared.publishSimulationState(running || interruptedSession != nil)
     }
 
     func setAutoRestoreMinutes(_ minutes: Int) {
@@ -643,6 +654,7 @@ final class AppModel {
         interruptedSession = nil
         interruptedSessionError = nil
         preferences.removeObject(forKey: Self.activeSessionRecoveryKey)
+        publishSimulationState()
     }
 
     func stopLocationSession() {
@@ -711,6 +723,7 @@ final class AppModel {
 
     private func applyDeviceSessionPhase(_ phase: DeviceSessionPhase) {
         updateAutoRestore(for: phase)
+        defer { publishSimulationState() }
         switch phase {
         case .idle:
             pendingSessionAnalyticsEvent = nil

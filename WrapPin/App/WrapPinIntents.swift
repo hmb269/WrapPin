@@ -165,6 +165,36 @@ struct StopSimulationIntent: AppIntent {
     }
 }
 
+struct ToggleSavedPlaceIntent: AppIntent {
+    static let title: LocalizedStringResource = "Toggle Simulation"
+    static let description = IntentDescription("If a simulation is running, stops it and restores the real location. Otherwise simulates the chosen saved place.")
+    static let openAppWhenRun: Bool = true
+
+    @Parameter(title: "Place")
+    var place: SavedPlaceEntity
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Toggle simulation of \(\.$place)")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        ExternalActionCenter.shared.submit(.toggle(place.target))
+        return .result()
+    }
+}
+
+struct IsSimulatingIntent: AppIntent {
+    static let title: LocalizedStringResource = "Is Location Simulated"
+    static let description = IntentDescription("Returns true while WrapPin is simulating this iPhone's location, or when a previous simulation has not been restored yet. Use it with If in Shortcuts.")
+    static let openAppWhenRun: Bool = false
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<Bool> {
+        .result(value: ExternalActionCenter.shared.currentSimulationState())
+    }
+}
+
 // MARK: - App Shortcuts
 
 struct WrapPinShortcuts: AppShortcutsProvider {
@@ -176,6 +206,14 @@ struct WrapPinShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Simulate Saved Place",
             systemImageName: "star.circle"
+        )
+        AppShortcut(
+            intent: ToggleSavedPlaceIntent(),
+            phrases: [
+                "Toggle simulation in \(.applicationName)"
+            ],
+            shortTitle: "Toggle Simulation",
+            systemImageName: "location.circle"
         )
         AppShortcut(
             intent: StopSimulationIntent(),

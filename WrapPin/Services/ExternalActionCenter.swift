@@ -6,6 +6,9 @@ import Observation
 enum ExternalLocationAction: Equatable, Sendable {
     case start(LocationTarget)
     case stop
+    /// Stops when a simulation is running (or was interrupted), otherwise
+    /// starts the given place.
+    case toggle(LocationTarget)
 }
 
 /// Hands external requests to the home screen, which owns the map and the
@@ -21,6 +24,22 @@ final class ExternalActionCenter {
     /// Changes on every submission so repeated identical requests are seen.
     private(set) var sequence = 0
     private(set) var lastErrorMessage: String?
+    /// Live state published by AppModel while WrapPin is running.
+    private(set) var isSimulating = false
+    private(set) var hasLiveState = false
+
+    func publishSimulationState(_ simulating: Bool) {
+        hasLiveState = true
+        isSimulating = simulating
+    }
+
+    /// Whether this iPhone is (or may still be) using a simulated location.
+    /// Without a running AppModel, a saved recovery record means a session
+    /// was active and has not been confirmed as restored.
+    func currentSimulationState(preferences: UserDefaults = .standard) -> Bool {
+        if hasLiveState { return isSimulating }
+        return preferences.data(forKey: "activeSessionRecovery") != nil
+    }
 
     func submit(_ action: ExternalLocationAction) {
         pending = action
@@ -55,6 +74,21 @@ final class ExternalActionCenter {
         switch host {
         case "stop":
             submit(.stop)
+            return true
+        case "toggle":
+            guard
+                let latitudeText = value("lat", "latitude"),
+                let longitudeText = value("lon", "lng", "longitude"),
+                let target = MapLinkParser.target(
+                    latitudeText: latitudeText,
+                    longitudeText: longitudeText,
+                    name: value("name")
+                )
+            else {
+                reportError(String(localized: "The link does not contain a location."))
+                return true
+            }
+            submit(.toggle(target))
             return true
         case "simulate":
             if

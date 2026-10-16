@@ -774,3 +774,8 @@
 "Stop Simulation and Restore Location" = "停止模拟并恢复真实位置";
 "Stops the simulated location and restores this iPhone's real location." = "停止模拟定位，恢复这台 iPhone 的真实位置。";
 "Restore Location" = "恢复真实位置";
+"Toggle Simulation" = "切换模拟";
+"If a simulation is running, stops it and restores the real location. Otherwise simulates the chosen saved place." = "正在模拟时停止模拟并恢复真实位置，否则模拟所选的收藏地点。";
+"Toggle simulation of ${place}" = "切换模拟 ${place}";
+"Is Location Simulated" = "是否正在模拟定位";
+"Returns true while WrapPin is simulating this iPhone's location, or when a previous simulation has not been restored yet. Use it with If in Shortcuts." = "WrapPin 正在模拟定位，或上次模拟尚未恢复时返回“是”。可配合快捷指令的“如果”使用。";

@@ -810,34 +810,56 @@ struct HomeView: View {
 
         switch action {
         case .start(let target):
-            guard case .paired = appModel.pairingStatus else {
-                externalActions.reportError(String(localized: "Pair this iPhone in WrapPin before starting a simulation."))
-                return
-            }
-            guard appModel.interruptedSession == nil else {
-                externalActions.reportError(String(localized: "Resolve the interrupted session first."))
-                return
-            }
-            if walkingSimulation.locksDestination {
-                externalActions.reportError(String(localized: "Stop the current route before simulating another place."))
-                return
-            }
-            walkingSimulation.reset()
-            walkingRoutePlanner.clear()
-            isShowingSavedPlaces = false
-            shouldRefreshRealLocationWhenActive = false
-            mapModel.show(target)
-            let mode = FixedCoordinateMode.recommended(for: target)
-            fixedCoordinateMode = mode
-            await appModel.startLocationSession(at: target, coordinateMode: mode)
+            await startExternalSimulation(at: target)
         case .stop:
+            stopExternalSimulation()
+        case .toggle(let target):
             switch appModel.deviceSession.phase {
             case .idle, .failed:
-                return
+                if appModel.interruptedSession != nil {
+                    // A previous session may still be applied: restore it.
+                    walkingSimulation.reset()
+                    walkingRoutePlanner.clear()
+                    await appModel.restoreRealLocationFromInterruptedSession()
+                } else {
+                    await startExternalSimulation(at: target)
+                }
             default:
-                shouldClearLocationAfterRestoration = true
-                appModel.stopLocationSession()
+                stopExternalSimulation()
             }
+        }
+    }
+
+    private func startExternalSimulation(at target: LocationTarget) async {
+        guard case .paired = appModel.pairingStatus else {
+            externalActions.reportError(String(localized: "Pair this iPhone in WrapPin before starting a simulation."))
+            return
+        }
+        guard appModel.interruptedSession == nil else {
+            externalActions.reportError(String(localized: "Resolve the interrupted session first."))
+            return
+        }
+        if walkingSimulation.locksDestination {
+            externalActions.reportError(String(localized: "Stop the current route before simulating another place."))
+            return
+        }
+        walkingSimulation.reset()
+        walkingRoutePlanner.clear()
+        isShowingSavedPlaces = false
+        shouldRefreshRealLocationWhenActive = false
+        mapModel.show(target)
+        let mode = FixedCoordinateMode.recommended(for: target)
+        fixedCoordinateMode = mode
+        await appModel.startLocationSession(at: target, coordinateMode: mode)
+    }
+
+    private func stopExternalSimulation() {
+        switch appModel.deviceSession.phase {
+        case .idle, .failed:
+            return
+        default:
+            shouldClearLocationAfterRestoration = true
+            appModel.stopLocationSession()
         }
     }
 
