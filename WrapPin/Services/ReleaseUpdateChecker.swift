@@ -34,7 +34,7 @@ extension ReleaseUpdateStatus {
 
 struct ReleaseUpdateChecker {
     private static let latestReleaseURL = URL(
-        string: "https://api.github.com/repos/suversal/WrapPin/releases/latest"
+        string: "https://api.github.com/repos/hmb269/WrapPin/releases/latest"
     )!
 
     func latestRelease() async throws -> PublishedRelease {

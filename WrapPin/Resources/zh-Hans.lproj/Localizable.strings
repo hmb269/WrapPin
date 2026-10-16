@@ -744,3 +744,33 @@
 
 /* Tunnel handoff and compatibility */
 "This setting chooses which app WrapPin opens for tunnel setup; it does not limit which apps are compatible. Other VPN or proxy apps can also be used if they provide a correctly configured device tunnel. Enable their tunnel manually first." = "此设置用于选择自动跳转的应用，不限制可使用的代理软件。其他代理或 VPN 软件只要已正确配置兼容的设备隧道，也可手动开启后直接使用。";
+
+/* Custom build: Quantumult X, Shortcuts, map links and auto restore */
+"WrapPin opens Quantumult X only when it cannot find the paired iPhone's device connection; turn on its VPN there and return. Quantumult X requires reflected_routes = 10.7.0.1/32 in the [general] section. If mobile data fails, use Wi-Fi. WrapPin cannot inspect Quantumult X's VPN switch." = "仅在找不到已配对 iPhone 的设备连接时，WrapPin 才会打开 Quantumult X，请在其中开启 VPN 后返回。Quantumult X 需要在 [general] 中设置 reflected_routes = 10.7.0.1/32；蜂窝网络失败时请改用 Wi-Fi。WrapPin 无法读取 Quantumult X 的 VPN 开关状态。";
+"The link does not contain a location." = "链接中没有找到位置。";
+"The short map link could not be opened. Check the network and try again." = "无法打开地图短链接，请检查网络后重试。";
+"Shared Location" = "分享的位置";
+"Pair this iPhone in WrapPin before starting a simulation." = "请先在 WrapPin 中完成配对，再开始模拟。";
+"Resolve the interrupted session first." = "请先处理上次中断的会话。";
+"Stop the current route before simulating another place." = "请先停止当前路线，再模拟其他地点。";
+"Off" = "关闭";
+"Auto Restore Real Location" = "定时恢复真实位置";
+"Restores At" = "恢复时间";
+"Stops the simulation and restores the real location after the chosen time, so a simulated location is not left on by mistake. The timer starts when a simulation starts." = "到达所选时间后自动停止模拟并恢复真实位置，避免忘记关闭。计时从开始模拟时算起。";
+"Saved Place" = "收藏地点";
+"Simulate Saved Place" = "模拟收藏地点";
+"Opens WrapPin and simulates one of your saved places." = "打开 WrapPin 并模拟一个收藏地点。";
+"Simulate ${place}" = "模拟 ${place}";
+"Simulate Location from Map Link" = "模拟地图链接中的位置";
+"Opens WrapPin and simulates the place in an Apple Maps or Amap link. Use it with Shortcuts input to run it from the share sheet." = "打开 WrapPin 并模拟苹果地图或高德地图链接中的地点。配合“快捷指令输入”可在分享菜单中使用。";
+"Map Link" = "地图链接";
+"Simulate the place in ${link}" = "模拟 ${link} 中的地点";
+"Simulate Coordinates" = "模拟经纬度";
+"Opens WrapPin and simulates a latitude and longitude. Use the same coordinates a map app shows (GCJ-02 in mainland China)." = "打开 WrapPin 并模拟指定经纬度。请使用地图 App 显示的坐标（中国大陆为 GCJ-02）。";
+"Latitude" = "纬度";
+"Longitude" = "经度";
+"Name" = "名称";
+"Simulate ${latitude}, ${longitude}" = "模拟 ${latitude}, ${longitude}";
+"Stop Simulation and Restore Location" = "停止模拟并恢复真实位置";
+"Stops the simulated location and restores this iPhone's real location." = "停止模拟定位，恢复这台 iPhone 的真实位置。";
+"Restore Location" = "恢复真实位置";

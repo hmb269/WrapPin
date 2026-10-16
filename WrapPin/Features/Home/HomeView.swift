@@ -21,6 +21,7 @@ struct HomeView: View {
     @State private var recoveredWalkError: String?
     @State private var followsSimulatedLocation = false
     @State private var fixedCoordinateMode: FixedCoordinateMode = .wgs84
+    @State private var externalActions = ExternalActionCenter.shared
     @FocusState private var isSearchFocused: Bool
 
     init(
@@ -436,6 +437,27 @@ struct HomeView: View {
             .padding(.top, 8)
             .padding(.bottom, 8)
 
+            if let message = externalActions.lastErrorMessage {
+                VStack {
+                    Spacer()
+                    Text(message)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.red, in: Capsule())
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 196)
+                }
+                .transition(.opacity)
+                .allowsHitTesting(false)
+                .task(id: message) {
+                    try? await Task.sleep(for: .seconds(5))
+                    externalActions.clearError()
+                }
+            }
+
             if let message = mapModel.errorMessage {
                 VStack {
                     Spacer()
@@ -539,6 +561,10 @@ struct HomeView: View {
             if isShowingDeviceSetup {
                 appModel.deviceSetupWasPresented()
             }
+            await handlePendingExternalAction()
+        }
+        .onChange(of: externalActions.sequence) { _, _ in
+            Task { await handlePendingExternalAction() }
         }
         .onChange(of: appModel.deviceSession.phase) { oldPhase, newPhase in
             walkingSimulation.handleDeviceSessionPhase(
@@ -772,6 +798,47 @@ struct HomeView: View {
 
         selectPreviewedRoute(index)
         return true
+    }
+
+    /// Runs a request from Shortcuts, a shared map link or a wrappin:// URL
+    /// through the same steps as the Start and Stop buttons.
+    private func handlePendingExternalAction() async {
+        guard let action = externalActions.takePending() else { return }
+        if case .checking = appModel.pairingStatus {
+            await appModel.restorePairingStatus()
+        }
+
+        switch action {
+        case .start(let target):
+            guard case .paired = appModel.pairingStatus else {
+                externalActions.reportError(String(localized: "Pair this iPhone in WrapPin before starting a simulation."))
+                return
+            }
+            guard appModel.interruptedSession == nil else {
+                externalActions.reportError(String(localized: "Resolve the interrupted session first."))
+                return
+            }
+            if walkingSimulation.locksDestination {
+                externalActions.reportError(String(localized: "Stop the current route before simulating another place."))
+                return
+            }
+            walkingSimulation.reset()
+            walkingRoutePlanner.clear()
+            isShowingSavedPlaces = false
+            shouldRefreshRealLocationWhenActive = false
+            mapModel.show(target)
+            let mode = FixedCoordinateMode.recommended(for: target)
+            fixedCoordinateMode = mode
+            await appModel.startLocationSession(at: target, coordinateMode: mode)
+        case .stop:
+            switch appModel.deviceSession.phase {
+            case .idle, .failed:
+                return
+            default:
+                shouldClearLocationAfterRestoration = true
+                appModel.stopLocationSession()
+            }
+        }
     }
 
     private func resumeInterruptedSession(_ recovery: SessionRecoveryRecord) {

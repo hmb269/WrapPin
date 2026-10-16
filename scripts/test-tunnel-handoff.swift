@@ -4,8 +4,8 @@ import Foundation
 enum TunnelHandoffCheck {
     static func main() {
         let choices = TunnelHandoffApp.allCases
-        precondition(choices == [.localDevVPN, .shadowrocket, .surge, .loon])
-        precondition(choices.map(\.launchURL.scheme) == ["localdevvpn", "shadowrocket", "surge", "loon"])
+        precondition(choices == [.localDevVPN, .shadowrocket, .surge, .loon, .quantumultX])
+        precondition(choices.map(\.launchURL.scheme) == ["localdevvpn", "shadowrocket", "surge", "loon", "quantumult-x"])
         precondition(TunnelHandoffApp.localDevVPN.launchURL.host == "enable")
         precondition(TunnelHandoffApp.localDevVPN.launchURL.query == "scheme=wrappin")
         precondition(TunnelHandoffApp.shadowrocket.launchURL.host == "connect")
@@ -25,6 +25,8 @@ enum TunnelHandoffCheck {
         precondition(TunnelHandoffPolicy.recommendsWiFiWhenUnavailable(for: .shadowrocket))
         precondition(TunnelHandoffPolicy.recommendsWiFiWhenUnavailable(for: .surge))
         precondition(TunnelHandoffPolicy.recommendsWiFiWhenUnavailable(for: .loon))
+        precondition(TunnelHandoffPolicy.recommendsWiFiWhenUnavailable(for: .quantumultX))
+        precondition(!TunnelHandoffPolicy.offersMobileDataWorkaround(for: .quantumultX))
         precondition(!TunnelHandoffPolicy.recommendsWiFiWhenUnavailable(for: .localDevVPN))
         precondition(TunnelHandoffPolicy.requiresLocalDevVPNCellularHandoff(
             app: .localDevVPN, isWiFiPathKnown: true, isWiFiSatisfied: false

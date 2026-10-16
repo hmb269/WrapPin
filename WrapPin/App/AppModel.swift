@@ -15,6 +15,9 @@ final class AppModel {
     private static let activeSessionRecoveryKey = "activeSessionRecovery"
     private static let anonymousUsageStatisticsKey = "sharesAnonymousUsageStatistics"
     private static let reducesBackgroundLocationIndicatorKey = "reducesBackgroundLocationIndicator"
+    private static let autoRestoreMinutesKey = "autoRestoreMinutes"
+    /// Minutes after which a simulation stops on its own; 0 turns it off.
+    static let autoRestoreChoices = [0, 15, 30, 60, 120, 240, 480]
 
     private let preferences: UserDefaults
 
@@ -36,6 +39,9 @@ final class AppModel {
     private(set) var isRestoringInterruptedSession = false
     private(set) var interruptedSessionError: String?
     private(set) var isStartingLocationSession = false
+    private(set) var autoRestoreMinutes: Int
+    private(set) var autoRestoreDeadline: Date?
+    private var autoRestoreTask: Task<Void, Never>?
 
     private var activeSessionRecovery: SessionRecoveryRecord?
     private var pendingSessionRecovery: SessionRecoveryRecord?
@@ -67,6 +73,7 @@ final class AppModel {
         case .shadowrocket: URL(string: "https://apps.apple.com/app/shadowrocket/id932747118")!
         case .surge: URL(string: "https://apps.apple.com/app/surge-5/id1442620678")!
         case .loon: URL(string: "https://apps.apple.com/app/loon/id1373567447")!
+        case .quantumultX: URL(string: "https://apps.apple.com/app/quantumult-x/id1443988620")!
         }
     }
 
@@ -101,6 +108,10 @@ final class AppModel {
         self.reducesBackgroundLocationIndicator = preferences.bool(
             forKey: Self.reducesBackgroundLocationIndicatorKey
         )
+        let storedAutoRestoreMinutes = preferences.integer(forKey: Self.autoRestoreMinutesKey)
+        self.autoRestoreMinutes = Self.autoRestoreChoices.contains(storedAutoRestoreMinutes)
+            ? storedAutoRestoreMinutes
+            : 0
         self.interruptedSession = Self.recoveryRecord(in: preferences)
         self.deviceSession.tunnelHandoffApp = tunnelHandoffApp
         self.deviceSession.usesBuiltInTunnel = usesBuiltInTunnel
@@ -277,6 +288,57 @@ final class AppModel {
         deviceSession.backgroundKeepAlive.setIndicatorPreferenceFromUserAction(enabled)
     }
 
+    func setAutoRestoreMinutes(_ minutes: Int) {
+        let value = Self.autoRestoreChoices.contains(minutes) ? minutes : 0
+        autoRestoreMinutes = value
+        preferences.set(value, forKey: Self.autoRestoreMinutesKey)
+        // A change applies from now to a simulation that is already running.
+        if case .active = deviceSession.phase {
+            scheduleAutoRestore()
+        } else {
+            cancelAutoRestore()
+        }
+    }
+
+    private func updateAutoRestore(for phase: DeviceSessionPhase) {
+        switch phase {
+        case .active:
+            if autoRestoreTask == nil, !isRestoringInterruptedSession {
+                scheduleAutoRestore()
+            }
+        case .idle, .failed, .stopping:
+            cancelAutoRestore()
+        case .openingLocalDevVPN, .discovering, .connecting:
+            break
+        }
+    }
+
+    private func scheduleAutoRestore() {
+        autoRestoreTask?.cancel()
+        autoRestoreTask = nil
+        autoRestoreDeadline = nil
+        guard autoRestoreMinutes > 0 else { return }
+
+        let deadline = Date().addingTimeInterval(TimeInterval(autoRestoreMinutes * 60))
+        autoRestoreDeadline = deadline
+        autoRestoreTask = Task { @MainActor [weak self] in
+            // The background keep-alive keeps WrapPin running during a
+            // session; if iOS suspended it anyway, this fires on resume.
+            try? await Task.sleep(for: .seconds(max(deadline.timeIntervalSinceNow, 0)))
+            guard !Task.isCancelled, let self else { return }
+            self.autoRestoreTask = nil
+            self.autoRestoreDeadline = nil
+            guard case .active = self.deviceSession.phase else { return }
+            self.stopLocationSession()
+        }
+    }
+
+    private func cancelAutoRestore() {
+        autoRestoreTask?.cancel()
+        autoRestoreTask = nil
+        autoRestoreDeadline = nil
+    }
+
     func completeOnboarding() {
         preferences.set(
             sharesAnonymousUsageStatistics,
@@ -318,6 +380,8 @@ final class AppModel {
         deviceSession.usesBuiltInTunnel = BuildEdition.supportsBuiltInTunnel
         sharesAnonymousUsageStatistics = false
         reducesBackgroundLocationIndicator = false
+        autoRestoreMinutes = 0
+        cancelAutoRestore()
         deviceSession.backgroundKeepAlive.restoreIndicatorPreference(false)
         interruptedSession = nil
         activeSessionRecovery = nil
@@ -646,6 +710,7 @@ final class AppModel {
     }
 
     private func applyDeviceSessionPhase(_ phase: DeviceSessionPhase) {
+        updateAutoRestore(for: phase)
         switch phase {
         case .idle:
             pendingSessionAnalyticsEvent = nil

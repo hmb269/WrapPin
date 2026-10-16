@@ -1,0 +1,83 @@
+name: Build IPA
+
+# Builds the unsigned Standard (SideStore) IPA on a GitHub-hosted Mac and
+# publishes it as a GitHub Release, so no local Xcode is needed.
+# Runs on every push to the custom branch, or manually from the Actions tab.
+
+on:
+  push:
+    branches: [custom-features]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-ipa
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 27
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -n 1)"
+          if [ -z "$XCODE" ]; then
+            echo "Xcode 27 is not installed on this runner image:"
+            ls -d /Applications/Xcode*.app
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Offline checks
+        run: |
+          python3 scripts/check-localization.py
+          xcrun swiftc -parse-as-library scripts/test-tunnel-handoff.swift \
+            WrapPin/Models/AppPreferences.swift WrapPin/App/BuildEdition.swift -o "$RUNNER_TEMP/check-handoff"
+          "$RUNNER_TEMP/check-handoff"
+          xcrun swiftc -parse-as-library scripts/check-fixed-coordinate-mode.swift \
+            WrapPin/Services/FixedCoordinateMode.swift WrapPin/Models/LocationTarget.swift \
+            WrapPin/Models/SessionRecoveryRecord.swift -o "$RUNNER_TEMP/check-coordinates"
+          "$RUNNER_TEMP/check-coordinates"
+
+      - name: Build unsigned IPA
+        run: OUTPUT_DIR="$RUNNER_TEMP/out" zsh scripts/package-ipa.sh standard
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WrapPin-unsigned-ipa
+          path: ${{ runner.temp }}/out/*.ipa
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(sed -n 's/^MARKETING_VERSION[[:space:]]*=[[:space:]]*//p' Configuration/Version.xcconfig | tail -n 1)"
+          BUILD="$(sed -n 's/^CURRENT_PROJECT_VERSION[[:space:]]*=[[:space:]]*//p' Configuration/Version.xcconfig | tail -n 1)"
+          TAG="v${VERSION}"
+          IPA="$(ls "$RUNNER_TEMP"/out/*.ipa | head -n 1)"
+          SHA="$(shasum -a 256 "$IPA" | cut -d ' ' -f 1)"
+          {
+            echo "自用版 WrapPin ${VERSION}（Build ${BUILD}），基于 suversal/WrapPin。"
+            echo
+            echo "新增：Quantumult X 隧道选项、快捷指令、从地图链接开始模拟、定时恢复真实位置。"
+            echo
+            echo "安装：下载下面的 .ipa，用 SideStore 安装（My Apps → +）。"
+            echo
+            echo "SHA-256: \`${SHA}\`"
+            echo
+            echo "Commit: ${GITHUB_SHA}"
+          } > "$RUNNER_TEMP/notes.md"
+          # One release per version; a new build replaces the previous one.
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" "$IPA" \
+            --target "$GITHUB_SHA" \
+            --title "WrapPin 自用版 ${VERSION} (Build ${BUILD})" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            --latest

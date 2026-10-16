@@ -5,6 +5,7 @@ enum TunnelHandoffApp: String, CaseIterable, Identifiable {
     case shadowrocket
     case surge
     case loon
+    case quantumultX
 
     var id: Self { self }
 
@@ -14,6 +15,7 @@ enum TunnelHandoffApp: String, CaseIterable, Identifiable {
         case .shadowrocket: "Shadowrocket"
         case .surge: "Surge"
         case .loon: "Loon"
+        case .quantumultX: "Quantumult X"
         }
     }
 
@@ -24,16 +26,19 @@ enum TunnelHandoffApp: String, CaseIterable, Identifiable {
         case .shadowrocket: URL(string: "shadowrocket://")!
         case .surge: URL(string: "surge://")!
         case .loon: URL(string: "loon://")!
+        case .quantumultX: URL(string: "quantumult-x://")!
         }
     }
 
     // LocalDevVPN returns through a callback; Shadowrocket, Surge and Loon each have a start action.
+    // Quantumult X has no documented URL action that turns its VPN on, so WrapPin only opens it.
     var launchURL: URL {
         switch self {
         case .localDevVPN: URL(string: "localdevvpn://enable?scheme=\(BuildEdition.callbackScheme)")!
         case .shadowrocket: URL(string: "shadowrocket://connect")!
         case .surge: URL(string: "surge:///start")!
         case .loon: URL(string: "loon://on")!
+        case .quantumultX: URL(string: "quantumult-x://")!
         }
     }
 }

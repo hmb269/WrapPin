@@ -31,6 +31,7 @@ struct WrapPinApp: App {
                     value: appModel.hasCompletedOnboarding
                 )
                 .onOpenURL { url in
+                    if ExternalActionCenter.shared.handle(url) { return }
                     appModel.handleOpenURL(url)
                 }
                 .onChange(of: scenePhase) { _, phase in

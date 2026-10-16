@@ -109,12 +109,16 @@ struct SettingsView: View {
                                 Text("WrapPin asks Surge to start its selected configuration only when it cannot find the paired iPhone's device connection. Surge 5.23+ requires 10.7.0.1/32 in tun-included-routes and 10.7.0.1 = reflect in IP Rewrite. If mobile data fails, use Wi-Fi. WrapPin cannot inspect Surge's VPN switch.")
                             case .loon:
                                 Text("WrapPin asks Loon to turn on its VPN only when it cannot find the paired iPhone's device connection. Loon build 1007+ requires include-tun = 10.7.0.1/32 and an enabled plugin with 10.7.0.1 = reflect in IP Rewrite. If mobile data fails, use Wi-Fi. WrapPin cannot inspect Loon's VPN switch.")
+                            case .quantumultX:
+                                Text("WrapPin opens Quantumult X only when it cannot find the paired iPhone's device connection; turn on its VPN there and return. Quantumult X requires reflected_routes = 10.7.0.1/32 in the [general] section. If mobile data fails, use Wi-Fi. WrapPin cannot inspect Quantumult X's VPN switch.")
                             }
                         }
                     }
                 }
 
                 backgroundIndicatorSection
+
+                autoRestoreSection
 
                 Section {
                     Toggle(isOn: anonymousUsageStatisticsBinding) {
@@ -402,6 +406,41 @@ struct SettingsView: View {
             get: { appModel.sharesAnonymousUsageStatistics },
             set: appModel.setSharesAnonymousUsageStatistics
         )
+    }
+
+    private var autoRestoreSection: some View {
+        Section {
+            Picker(selection: Binding(
+                get: { appModel.autoRestoreMinutes },
+                set: appModel.setAutoRestoreMinutes
+            )) {
+                ForEach(AppModel.autoRestoreChoices, id: \.self) { minutes in
+                    Text(Self.autoRestoreTitle(minutes)).tag(minutes)
+                }
+            } label: {
+                settingsRowLabel("Auto Restore Real Location", symbol: "timer")
+            }
+
+            if let deadline = appModel.autoRestoreDeadline {
+                LabeledContent {
+                    Text(deadline, style: .time)
+                } label: {
+                    settingsRowLabel("Restores At", symbol: "clock")
+                }
+            }
+        } footer: {
+            Text("Stops the simulation and restores the real location after the chosen time, so a simulated location is not left on by mistake. The timer starts when a simulation starts.")
+        }
+    }
+
+    private static func autoRestoreTitle(_ minutes: Int) -> String {
+        if minutes == 0 {
+            return String(localized: "Off")
+        }
+        if minutes < 60 {
+            return String(localized: "\(minutes) min")
+        }
+        return String(localized: "\(minutes / 60) hr")
     }
 
     private var backgroundIndicatorSection: some View {
