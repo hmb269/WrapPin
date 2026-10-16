@@ -6,12 +6,6 @@ struct SettingsView: View {
     private static let repositoryURL = URL(
         string: "https://github.com/suversal/WrapPin"
     )!
-    private static let bugReportURL = URL(
-        string: "https://github.com/suversal/WrapPin/issues/new?template=bug_report.yml"
-    )!
-    private static let featureRequestURL = URL(
-        string: "https://github.com/suversal/WrapPin/issues/new?template=feature_request.yml"
-    )!
     private static let xProfileURL = URL(
         string: "https://x.com/suversal"
     )!
@@ -144,7 +138,7 @@ struct SettingsView: View {
                     }
 
                     LabeledContent {
-                        Text(versionText)
+                        Text(String(localized: "\(versionText) (Personal Build)"))
                     } label: {
                         settingsRowLabel("Version", symbol: "tag")
                     }
@@ -192,20 +186,12 @@ struct SettingsView: View {
 
                 Section {
                     Link(destination: Self.repositoryURL) {
-                        settingsRowLabel("View & Star on GitHub", symbol: "star")
-                    }
-
-                    Link(destination: Self.bugReportURL) {
-                        settingsRowLabel("Report a Bug", symbol: "ladybug")
-                    }
-
-                    Link(destination: Self.featureRequestURL) {
-                        settingsRowLabel("Request a Feature", symbol: "lightbulb")
+                        settingsRowLabel("Original Project on GitHub", symbol: "star")
                     }
 
                     Link(destination: Self.xProfileURL) {
                         Label {
-                            Text("Follow Me")
+                            Text("Original Author on X")
                         } icon: {
                             Text(verbatim: "𝕏")
                                 .font(.system(size: xLogoSize, weight: .regular))
@@ -214,9 +200,9 @@ struct SettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Community")
+                    Text("Original Project")
                 } footer: {
-                    Text("Star the repository if WrapPin helps you, or suggest an improvement. For pairing or connection problems, open Connection Health and use Copy Diagnostics. Never include pairing records, credentials or private locations.")
+                    Text("This is a personal build with extra features. Please do not report its problems to the original author, because the added features are not part of the original project.")
                 }
 
                 Section {

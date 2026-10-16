@@ -796,3 +796,8 @@
 "Adds the places in Apple Maps or Amap links to WrapPin's favourites without starting a simulation. Put one link or latitude,longitude per line." = "把苹果地图或高德地图链接中的地点加入 WrapPin 收藏，不会开始模拟。每行一个链接或“纬度,经度”。";
 "Map Links" = "地图链接";
 "Add ${links} to favourites" = "将 ${links} 添加到收藏";
+"%@ (Personal Build)" = "%@（自用版）";
+"Original Project on GitHub" = "原项目（GitHub）";
+"Original Author on X" = "原作者（X）";
+"Original Project" = "原项目";
+"This is a personal build with extra features. Please do not report its problems to the original author, because the added features are not part of the original project." = "这是加了额外功能的自用版。遇到问题请不要反馈给原作者，新增功能不属于原项目，原作者无法排查。";
