@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SavedPlacesView: View {
     private enum ClearTarget: String, Identifiable {
@@ -13,6 +14,11 @@ struct SavedPlacesView: View {
     @State private var favouriteName = ""
     @State private var clearTarget: ClearTarget?
     @State private var editMode: EditMode = .inactive
+    @State private var isImportingFile = false
+    @State private var isPastingLinks = false
+    @State private var pastedLinks = ""
+    @State private var isReadingImport = false
+    @State private var importMessage: String?
 
     let favourites: [LocationTarget]
     let history: [LocationTarget]
@@ -27,6 +33,7 @@ struct SavedPlacesView: View {
     let onDeleteHistory: (LocationTarget) -> Void
     let onClearFavourites: () -> Void
     let onClearHistory: () -> Void
+    let onImportFavourites: ([LocationTarget]) -> FavouriteImportResult
 
     var body: some View {
         NavigationStack {
@@ -132,9 +139,65 @@ struct SavedPlacesView: View {
                             .accessibilityLabel("Reorder favourites")
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        ShareLink(
+                            item: FavouritesExport(locations: favourites),
+                            preview: SharePreview(String(localized: "WrapPin Favourites"))
+                        ) {
+                            Label("Export Favourites", systemImage: "square.and.arrow.up")
+                        }
+                        .disabled(favourites.isEmpty)
+
+                        Button {
+                            isImportingFile = true
+                        } label: {
+                            Label("Import from File", systemImage: "doc")
+                        }
+
+                        Button {
+                            pastedLinks = ""
+                            isPastingLinks = true
+                        } label: {
+                            Label("Paste Map Links", systemImage: "link")
+                        }
+                    } label: {
+                        if isReadingImport {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "square.and.arrow.down.on.square")
+                        }
+                    }
+                    .accessibilityLabel("Import or Export Favourites")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            .fileImporter(
+                isPresented: $isImportingFile,
+                allowedContentTypes: [.json, .plainText, .commaSeparatedText, .text]
+            ) { result in
+                switch result {
+                case .success(let url):
+                    Task { await importFile(at: url) }
+                case .failure(let error):
+                    importMessage = error.localizedDescription
+                }
+            }
+            .sheet(isPresented: $isPastingLinks) {
+                pasteLinksSheet
+            }
+            .alert(
+                "Import Favourites",
+                isPresented: Binding(
+                    get: { importMessage != nil },
+                    set: { if !$0 { importMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) { importMessage = nil }
+            } message: {
+                Text(importMessage ?? "")
             }
             .alert(
                 "Rename Favourite",
@@ -174,6 +237,71 @@ struct SavedPlacesView: View {
                 Text(clearConfirmationMessage)
             }
         }
+    }
+
+    private var pasteLinksSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextEditor(text: $pastedLinks)
+                        .frame(minHeight: 200)
+                        .font(.callout.monospaced())
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                } footer: {
+                    Text("Paste one map link or latitude,longitude per line. Apple Maps and Amap links, including short links, are supported. A name may come before the coordinates.")
+                }
+            }
+            .navigationTitle("Paste Map Links")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPastingLinks = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if isReadingImport {
+                        ProgressView()
+                    } else {
+                        Button("Add") {
+                            Task { await importText(pastedLinks) }
+                        }
+                        .disabled(pastedLinks.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+        }
+        .interactiveDismissDisabled(isReadingImport)
+    }
+
+    private func importFile(at url: URL) async {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            importMessage = String(localized: "The file could not be read.")
+            return
+        }
+        isReadingImport = true
+        let parsed = await FavouritesFile.locations(from: data)
+        isReadingImport = false
+        finishImport(parsed.locations, failed: parsed.failed)
+    }
+
+    private func importText(_ text: String) async {
+        isReadingImport = true
+        let parsed = await FavouritesFile.locations(fromText: text)
+        isReadingImport = false
+        isPastingLinks = false
+        finishImport(parsed.locations, failed: parsed.failed)
+    }
+
+    private func finishImport(_ locations: [LocationTarget], failed: Int) {
+        guard !locations.isEmpty else {
+            importMessage = String(localized: "No places were found to import.")
+            return
+        }
+        var result = onImportFavourites(locations)
+        result.failed = failed
+        importMessage = result.summary
     }
 
     private func select(_ location: LocationTarget) {

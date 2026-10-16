@@ -670,7 +670,8 @@ struct HomeView: View {
                 onRenameFavourite: appModel.renameFavourite,
                 onDeleteHistory: appModel.removeFromHistory,
                 onClearFavourites: appModel.clearFavouriteLocations,
-                onClearHistory: appModel.clearLocationHistory
+                onClearHistory: appModel.clearLocationHistory,
+                onImportFavourites: { appModel.importFavourites($0) }
             )
         }
     }

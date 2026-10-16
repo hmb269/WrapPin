@@ -52,7 +52,7 @@ struct SavedPlaceQuery: EntityQuery {
 
 /// Reads the favourites AppModel stores, without needing the app's state.
 enum SavedPlaceStore {
-    private static let favouritesKey = "favouriteLocations"
+    static let favouritesKey = "favouriteLocations"
 
     static func favourites(in preferences: UserDefaults = .standard) -> [LocationTarget] {
         guard
@@ -192,6 +192,30 @@ struct IsSimulatingIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<Bool> {
         .result(value: ExternalActionCenter.shared.currentSimulationState())
+    }
+}
+
+struct AddFavouritesFromMapLinksIntent: AppIntent {
+    static let title: LocalizedStringResource = "Add Favourites from Map Links"
+    static let description = IntentDescription("Adds the places in Apple Maps or Amap links to WrapPin's favourites without starting a simulation. Put one link or latitude,longitude per line.")
+    static let openAppWhenRun: Bool = false
+
+    @Parameter(title: "Map Links")
+    var links: String
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Add \(\.$links) to favourites")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let parsed = await FavouritesFile.locations(fromText: links)
+        guard !parsed.locations.isEmpty else {
+            throw WrapPinIntentError(message: String(localized: "The link does not contain a location."))
+        }
+        var result = ExternalActionCenter.shared.addFavourites(parsed.locations)
+        result.failed = parsed.failed
+        return .result(dialog: "\(result.summary)")
     }
 }
 

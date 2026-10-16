@@ -27,6 +27,22 @@ final class ExternalActionCenter {
     /// Live state published by AppModel while WrapPin is running.
     private(set) var isSimulating = false
     private(set) var hasLiveState = false
+    /// Set by AppModel so favourites added from Shortcuts update the live list.
+    @ObservationIgnored
+    var favouriteImporter: (@MainActor ([LocationTarget]) -> FavouriteImportResult)?
+
+    /// Adds favourites without opening WrapPin. If the app's model is not
+    /// loaded, the stored list is updated and read on the next launch.
+    func addFavourites(_ targets: [LocationTarget], preferences: UserDefaults = .standard) -> FavouriteImportResult {
+        if let favouriteImporter {
+            return favouriteImporter(targets)
+        }
+        let merged = FavouriteMerge.merge(targets, into: SavedPlaceStore.favourites(in: preferences))
+        if merged.result.added > 0, let data = try? JSONEncoder().encode(merged.favourites) {
+            preferences.set(data, forKey: SavedPlaceStore.favouritesKey)
+        }
+        return merged.result
+    }
 
     func publishSimulationState(_ simulating: Bool) {
         hasLiveState = true

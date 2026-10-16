@@ -76,7 +76,7 @@ jobs:
           {
             echo "自用版 WrapPin ${VERSION}（Build ${BUILD}），基于 suversal/WrapPin。"
             echo
-            echo "新增：Quantumult X 隧道选项、快捷指令、从地图链接开始模拟、定时恢复真实位置。"
+            echo "新增：Quantumult X 隧道选项、快捷指令、从地图链接开始模拟、收藏导入导出、定时恢复真实位置。"
             echo
             echo "安装：下载下面的 .ipa，用 SideStore 安装（My Apps → +）。若签名工具提示无法打开 ZIP，改用 -compat.ipa。"
             echo

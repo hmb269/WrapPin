@@ -154,6 +154,20 @@ final class AppModel {
             usageAnalytics.recordActivation(enabled: sharesAnonymousUsageStatistics)
         }
         publishSimulationState()
+        ExternalActionCenter.shared.favouriteImporter = { [weak self] targets in
+            self?.importFavourites(targets) ?? FavouriteImportResult()
+        }
+    }
+
+    /// Adds imported places after the current favourites, skipping duplicates.
+    @discardableResult
+    func importFavourites(_ targets: [LocationTarget]) -> FavouriteImportResult {
+        let merged = FavouriteMerge.merge(targets, into: favouriteLocations)
+        if merged.result.added > 0 {
+            favouriteLocations = merged.favourites
+            save(favouriteLocations, forKey: Self.favouritesKey)
+        }
+        return merged.result
     }
 
     func chooseTarget(_ target: LocationTarget) {

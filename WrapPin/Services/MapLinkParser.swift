@@ -167,11 +167,20 @@ enum MapLinkParser {
     // MARK: - Helpers
 
     private static func targetFromCoordinateText(_ text: String, name: String?) -> LocationTarget? {
-        let separators = CharacterSet(charactersIn: ", ，;；")
-        let numbers = text.components(separatedBy: separators)
-            .compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        // "22.63,110.15", "人民广场 31.2304,121.4737" or "人民广场,31.2304,121.4737"
+        let separators = CharacterSet(charactersIn: ", ，;；\t")
+        let tokens = text.components(separatedBy: separators)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let numbers = tokens.compactMap { Double($0) }
         guard numbers.count == 2 else { return nil }
-        return makeTarget(latitude: numbers[0], longitude: numbers[1], name: name, detail: nil)
+        let words = tokens.filter { Double($0) == nil }.joined(separator: " ")
+        return makeTarget(
+            latitude: numbers[0],
+            longitude: numbers[1],
+            name: name ?? (words.isEmpty ? nil : words),
+            detail: nil
+        )
     }
 
     private static func targetFromPair(
