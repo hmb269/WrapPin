@@ -48,7 +48,13 @@ jobs:
           "$RUNNER_TEMP/check-coordinates"
 
       - name: Build unsigned IPA
-        run: OUTPUT_DIR="$RUNNER_TEMP/out" zsh scripts/package-ipa.sh standard
+        run: |
+          OUTPUT_DIR="$RUNNER_TEMP/out" zsh scripts/package-ipa.sh standard
+          # Also repack with Info-ZIP for signing apps whose ZIP reader rejects ditto's layout.
+          IPA="$(ls "$RUNNER_TEMP"/out/*-unsigned.ipa | head -n 1)"
+          mkdir -p "$RUNNER_TEMP/repack"
+          (cd "$RUNNER_TEMP/repack" && unzip -q "$IPA" && zip -qr -X -y "${IPA%-unsigned.ipa}-compat.ipa" Payload)
+          unzip -tq "${IPA%-unsigned.ipa}-compat.ipa"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v5
@@ -63,22 +69,26 @@ jobs:
           VERSION="$(sed -n 's/^MARKETING_VERSION[[:space:]]*=[[:space:]]*//p' Configuration/Version.xcconfig | tail -n 1)"
           BUILD="$(sed -n 's/^CURRENT_PROJECT_VERSION[[:space:]]*=[[:space:]]*//p' Configuration/Version.xcconfig | tail -n 1)"
           TAG="v${VERSION}"
-          IPA="$(ls "$RUNNER_TEMP"/out/*.ipa | head -n 1)"
+          IPA="$(ls "$RUNNER_TEMP"/out/*-unsigned.ipa | head -n 1)"
+          COMPAT="${IPA%-unsigned.ipa}-compat.ipa"
           SHA="$(shasum -a 256 "$IPA" | cut -d ' ' -f 1)"
+          COMPAT_SHA="$(shasum -a 256 "$COMPAT" | cut -d ' ' -f 1)"
           {
             echo "自用版 WrapPin ${VERSION}（Build ${BUILD}），基于 suversal/WrapPin。"
             echo
             echo "新增：Quantumult X 隧道选项、快捷指令、从地图链接开始模拟、定时恢复真实位置。"
             echo
-            echo "安装：下载下面的 .ipa，用 SideStore 安装（My Apps → +）。"
+            echo "安装：下载下面的 .ipa，用 SideStore 安装（My Apps → +）。若签名工具提示无法打开 ZIP，改用 -compat.ipa。"
             echo
-            echo "SHA-256: \`${SHA}\`"
+            echo "SHA-256（unsigned）: \`${SHA}\`"
+            echo
+            echo "SHA-256（compat）: \`${COMPAT_SHA}\`"
             echo
             echo "Commit: ${GITHUB_SHA}"
           } > "$RUNNER_TEMP/notes.md"
           # One release per version; a new build replaces the previous one.
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" "$IPA" \
+          gh release create "$TAG" "$IPA" "$COMPAT" \
             --target "$GITHUB_SHA" \
             --title "WrapPin 自用版 ${VERSION} (Build ${BUILD})" \
             --notes-file "$RUNNER_TEMP/notes.md" \
