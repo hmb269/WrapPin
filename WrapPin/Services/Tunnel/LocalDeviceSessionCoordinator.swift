@@ -534,7 +534,7 @@ final class LocalDeviceSessionCoordinator: NSObject {
                 else { return }
 
                 self.tunnelAppProbeTask = nil
-                self.openSelectedTunnelAppForPendingSession()
+                self.handleTunnelUnavailable()
             }
         }
 
@@ -543,7 +543,7 @@ final class LocalDeviceSessionCoordinator: NSObject {
                 try? await Task.sleep(for: .seconds(30))
                 guard !Task.isCancelled, let self, self.phase == .discovering else { return }
                 if !self.hasOpenedTunnelAppThisAttempt && !self.hasReachedDeviceTunnel {
-                    self.openSelectedTunnelAppForPendingSession()
+                    self.handleTunnelUnavailable()
                 } else if self.sawNonMatchingService {
                     self.fail(
                         "WrapPin found an outdated device announcement. Restart the selected tunnel and try again.",
@@ -1038,7 +1038,7 @@ final class LocalDeviceSessionCoordinator: NSObject {
 
         if !hasOpenedTunnelAppThisAttempt && !hasReachedDeviceTunnel {
             serviceProbeAttemptCount = 0
-            openSelectedTunnelAppForPendingSession()
+            handleTunnelUnavailable()
             return
         }
 
@@ -1242,6 +1242,24 @@ final class LocalDeviceSessionCoordinator: NSObject {
                 self.beginDiscovery(reportTimeout: false)
                 try? await Task.sleep(for: .seconds(4))
             }
+        }
+    }
+
+    /// On mobile data a proxy app is usually already connected; its tunnel is
+    /// just unreachable until the radios are off. Show the Airplane Mode steps
+    /// instead of switching to the app. Elsewhere, open the app as before.
+    private var prefersAirplaneModeGuidance: Bool {
+        isMobileDataStartupMode
+            && !usesBuiltInTunnel
+            && TunnelHandoffPolicy.usesAirplaneModeForMobileData(tunnelHandoffApp)
+    }
+
+    private func handleTunnelUnavailable() {
+        if mobileDataGuidance == .turnOff { return }
+        if prefersAirplaneModeGuidance {
+            enterMobileDataGuidance()
+        } else {
+            openSelectedTunnelAppForPendingSession()
         }
     }
 
