@@ -801,3 +801,7 @@
 "Original Author on X" = "原作者（X）";
 "Original Project" = "原项目";
 "This is a personal build with extra features. Please do not report its problems to the original author, because the added features are not part of the original project." = "这是加了额外功能的自用版。遇到问题请不要反馈给原作者，新增功能不属于原项目，原作者无法排查。";
+"Turn On Airplane Mode" = "打开飞行模式";
+"Turn Off Airplane Mode" = "关闭飞行模式";
+"Make sure %@ shows connected, turn on Airplane Mode, then return to WrapPin. If the connection drops when Airplane Mode is on, use Wi-Fi instead." = "请先确认 %@ 显示为已连接，再打开飞行模式，然后返回 WrapPin。若打开后连接随即中断，请改连 Wi-Fi 重试。";
+"The secure location session is ready. Turn off Airplane Mode to restore the network; the simulation will continue." = "安全位置会话已就绪。现在可以关闭飞行模式恢复网络，位置模拟会继续。";

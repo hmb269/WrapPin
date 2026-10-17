@@ -450,6 +450,17 @@ final class LocalDeviceSessionCoordinator: NSObject {
     // Retry once per start; never turn this into an unbounded recovery loop.
     private func showConnectionHelp() {
         guard pendingSession != nil, !workerIsRunning else { return }
+        // On mobile data a proxy app's tunnel is usually unreachable until the
+        // radios are briefly off; go straight to that guidance.
+        if mobileDataGuidance == .turnOff { return }
+        if
+            isMobileDataStartupMode,
+            !usesBuiltInTunnel,
+            TunnelHandoffPolicy.usesAirplaneModeForMobileData(tunnelHandoffApp)
+        {
+            enterMobileDataGuidance()
+            return
+        }
         guard hasOpenedTunnelAppThisAttempt, !isMobileDataStartupMode,
               !vpnReturnRetryUsed else {
             mobileDataGuidance = .connectionHelp
@@ -1033,6 +1044,8 @@ final class LocalDeviceSessionCoordinator: NSObject {
 
         if isMobileDataStartupMode {
             serviceProbeAttemptCount = 0
+            // Keep the guidance loop running while the user turns radios off.
+            if mobileDataGuidance == .turnOff { return }
             if TunnelHandoffPolicy.recommendsWiFiWhenUnavailable(for: tunnelHandoffApp) {
                 showConnectionHelp()
             }

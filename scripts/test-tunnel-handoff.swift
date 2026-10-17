@@ -19,14 +19,19 @@ enum TunnelHandoffCheck {
         precondition(TunnelHandoffApp(rawValue: "unknown") ?? .localDevVPN == .localDevVPN)
 
         precondition(TunnelHandoffPolicy.offersMobileDataWorkaround(for: .localDevVPN))
-        precondition(!TunnelHandoffPolicy.offersMobileDataWorkaround(for: .shadowrocket))
-        precondition(!TunnelHandoffPolicy.offersMobileDataWorkaround(for: .surge))
-        precondition(!TunnelHandoffPolicy.offersMobileDataWorkaround(for: .loon))
+        precondition(!TunnelHandoffPolicy.usesAirplaneModeForMobileData(.localDevVPN))
+        precondition(TunnelHandoffPolicy.offersMobileDataWorkaround(for: .shadowrocket))
+        precondition(TunnelHandoffPolicy.usesAirplaneModeForMobileData(.shadowrocket))
+        precondition(TunnelHandoffPolicy.offersMobileDataWorkaround(for: .surge))
+        precondition(TunnelHandoffPolicy.usesAirplaneModeForMobileData(.surge))
+        precondition(TunnelHandoffPolicy.offersMobileDataWorkaround(for: .loon))
+        precondition(TunnelHandoffPolicy.usesAirplaneModeForMobileData(.loon))
         precondition(TunnelHandoffPolicy.recommendsWiFiWhenUnavailable(for: .shadowrocket))
         precondition(TunnelHandoffPolicy.recommendsWiFiWhenUnavailable(for: .surge))
         precondition(TunnelHandoffPolicy.recommendsWiFiWhenUnavailable(for: .loon))
         precondition(TunnelHandoffPolicy.recommendsWiFiWhenUnavailable(for: .quantumultX))
-        precondition(!TunnelHandoffPolicy.offersMobileDataWorkaround(for: .quantumultX))
+        precondition(TunnelHandoffPolicy.offersMobileDataWorkaround(for: .quantumultX))
+        precondition(TunnelHandoffPolicy.usesAirplaneModeForMobileData(.quantumultX))
         precondition(!TunnelHandoffPolicy.recommendsWiFiWhenUnavailable(for: .localDevVPN))
         precondition(TunnelHandoffPolicy.requiresLocalDevVPNCellularHandoff(
             app: .localDevVPN, isWiFiPathKnown: true, isWiFiSatisfied: false

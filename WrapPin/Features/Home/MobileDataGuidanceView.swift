@@ -152,9 +152,13 @@ struct MobileDataGuidanceView: View {
                 String(localized: "Still Connecting")
             }
         case .turnOff:
-            String(localized: "Turn Mobile Data Off")
+            usesAirplaneMode
+                ? String(localized: "Turn On Airplane Mode")
+                : String(localized: "Turn Mobile Data Off")
         case .turnBackOn:
-            String(localized: "Turn Mobile Data Back On")
+            usesAirplaneMode
+                ? String(localized: "Turn Off Airplane Mode")
+                : String(localized: "Turn Mobile Data Back On")
         }
     }
 
@@ -176,10 +180,23 @@ struct MobileDataGuidanceView: View {
             if usesBuiltInTunnel {
                 return String(localized: "Keep the built-in tunnel connected, switch mobile data off briefly, then return to WrapPin.")
             }
+            if usesAirplaneMode {
+                return String(
+                    format: NSLocalizedString("Make sure %@ shows connected, turn on Airplane Mode, then return to WrapPin. If the connection drops when Airplane Mode is on, use Wi-Fi instead.", comment: ""),
+                    tunnelHandoffApp.title
+                )
+            }
             return String(localized: "Make sure LocalDevVPN is connected, switch mobile data off briefly, then return to WrapPin.")
         case .turnBackOn:
+            if usesAirplaneMode {
+                return String(localized: "The secure location session is ready. Turn off Airplane Mode to restore the network; the simulation will continue.")
+            }
             return String(localized: "The secure location session is ready. You can restore mobile data now; spoofing will continue over 5G.")
         }
+    }
+
+    private var usesAirplaneMode: Bool {
+        !usesBuiltInTunnel && TunnelHandoffPolicy.usesAirplaneModeForMobileData(tunnelHandoffApp)
     }
 
     private var openTunnelAppTitle: String {
@@ -197,7 +214,7 @@ struct MobileDataGuidanceView: View {
     private var iconSymbol: String {
         switch guidance {
         case .connectionHelp: "lock.shield.fill"
-        case .turnOff: "antenna.radiowaves.left.and.right"
+        case .turnOff: usesAirplaneMode ? "airplane" : "antenna.radiowaves.left.and.right"
         case .turnBackOn: "checkmark"
         }
     }

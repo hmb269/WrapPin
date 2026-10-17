@@ -44,8 +44,16 @@ enum TunnelHandoffApp: String, CaseIterable, Identifiable {
 }
 
 enum TunnelHandoffPolicy {
+    /// Every tunnel app can use the mobile data workaround: with mobile data
+    /// (or all radios) briefly off, the device tunnel becomes reachable.
     static func offersMobileDataWorkaround(for app: TunnelHandoffApp) -> Bool {
-        app == .localDevVPN
+        true
+    }
+
+    /// Proxy apps stay connected more reliably through Airplane Mode than
+    /// through switching mobile data off, so their guidance asks for that.
+    static func usesAirplaneModeForMobileData(_ app: TunnelHandoffApp) -> Bool {
+        app != .localDevVPN
     }
 
     static func recommendsWiFiWhenUnavailable(for app: TunnelHandoffApp) -> Bool {
