@@ -85,6 +85,16 @@ final class LocalDeviceSessionCoordinator: NSObject {
     }
 
     private static let localDevVPNPeerAddress = "10.7.0.1"
+    private static let cachedServiceKey = "lastReachedRemotePairingService"
+
+    /// The last pairing service that was reached through the device tunnel.
+    /// Bonjour discovery often finds nothing on mobile data when a proxy app
+    /// provides the tunnel, so WrapPin also tries this endpoint directly.
+    private struct CachedRemotePairingService: Codable {
+        let port: UInt16
+        let identifier: String
+        let authTag: String
+    }
     private static let minimumRestorationDisplayDuration: TimeInterval = 1.2
 
     private(set) var phase: DeviceSessionPhase = .idle {
@@ -182,6 +192,8 @@ final class LocalDeviceSessionCoordinator: NSObject {
     private var serviceProbeTimeout: Task<Void, Never>?
     private var serviceProbeRetryTask: Task<Void, Never>?
     private var serviceProbeAttemptCount = 0
+    private var cachedServiceProbeTask: Task<Void, Never>?
+    private var isProbingCachedService = false
 
     private var activeSession: OpaquePointer?
     private var activeRunIdentifier: UUID?
@@ -479,6 +491,7 @@ final class LocalDeviceSessionCoordinator: NSObject {
         connectionStage = .discoveringDevice
         browser.delegate = self
         browser.searchForServices(ofType: "_remotepairing._tcp.", inDomain: "local.")
+        scheduleCachedServiceProbe()
 
         if showConnectionHelpIfUnavailable {
             mobileDataGuidanceDelay = Task { @MainActor [weak self] in
@@ -533,6 +546,73 @@ final class LocalDeviceSessionCoordinator: NSObject {
                 }
             }
         }
+    }
+
+    private func scheduleCachedServiceProbe() {
+        guard let cached = cachedServiceForPendingSession() else { return }
+        cachedServiceProbeTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard
+                !Task.isCancelled,
+                let self,
+                self.phase == .discovering,
+                self.pendingSession != nil,
+                !self.workerIsRunning,
+                self.resolvedService == nil,
+                self.serviceProbeConnection == nil,
+                self.serviceProbeRetryTask == nil
+            else { return }
+            self.cachedServiceProbeTask = nil
+            self.isProbingCachedService = true
+            self.connectionStage = .verifyingDevice
+            self.verifyServiceIsReachable(cached)
+        }
+    }
+
+    private func cachedServiceForPendingSession() -> RemotePairingService? {
+        guard
+            let data = UserDefaults.standard.data(forKey: Self.cachedServiceKey),
+            let cached = try? JSONDecoder().decode(CachedRemotePairingService.self, from: data),
+            cached.port > 0,
+            let pairingRecord = pendingSession?.pairingRecord
+        else { return nil }
+
+        // Only reuse an endpoint announced by the iPhone in the current pairing record.
+        let matchesPairedDevice = pairingRecord.withUnsafeBytes { recordBytes in
+            guard let recordBaseAddress = recordBytes.bindMemory(to: UInt8.self).baseAddress else {
+                return false
+            }
+            return cached.identifier.withCString { serviceIdentifier in
+                cached.authTag.withCString { authTag in
+                    wp_pairing_record_matches_service(
+                        recordBaseAddress,
+                        pairingRecord.count,
+                        serviceIdentifier,
+                        authTag
+                    ) == 1
+                }
+            }
+        }
+        guard matchesPairedDevice else { return nil }
+
+        return RemotePairingService(
+            host: Self.localDevVPNPeerAddress,
+            port: cached.port,
+            identifier: cached.identifier,
+            authTag: cached.authTag,
+            endpointSource: .fallback,
+            fallbackHost: nil
+        )
+    }
+
+    private func rememberReachedService(_ service: RemotePairingService) {
+        let cached = CachedRemotePairingService(
+            port: service.port,
+            identifier: service.identifier,
+            authTag: service.authTag
+        )
+        guard let data = try? JSONEncoder().encode(cached) else { return }
+        UserDefaults.standard.set(data, forKey: Self.cachedServiceKey)
     }
 
     private func resolve(_ service: NetService) {
@@ -819,6 +899,9 @@ final class LocalDeviceSessionCoordinator: NSObject {
         mobileDataGuidanceDelay = nil
         tunnelAppProbeTask?.cancel()
         tunnelAppProbeTask = nil
+        cachedServiceProbeTask?.cancel()
+        cachedServiceProbeTask = nil
+        isProbingCachedService = false
         browser.stop()
 
         for service in discoveredServices {
@@ -894,7 +977,20 @@ final class LocalDeviceSessionCoordinator: NSObject {
     ) {
         guard phase == .discovering, pendingSession != nil else { return }
 
+        if isProbingCachedService {
+            isProbingCachedService = false
+            if !reachable {
+                // The saved port may be stale. Keep waiting for Bonjour and
+                // retry any service that resolved while the probe ran.
+                for resolved in discoveredServices where !(resolved.addresses ?? []).isEmpty {
+                    useResolvedService(resolved)
+                }
+                return
+            }
+        }
+
         if reachable {
+            rememberReachedService(service)
             serviceProbeAttemptCount = 0
             hasReachedDeviceTunnel = true
             resolvedService = service
