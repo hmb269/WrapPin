@@ -112,7 +112,12 @@ final class AppModel {
         self.autoRestoreMinutes = Self.autoRestoreChoices.contains(storedAutoRestoreMinutes)
             ? storedAutoRestoreMinutes
             : 0
-        self.interruptedSession = Self.recoveryRecord(in: preferences)
+        // Personal build: when WrapPin was closed (for example swiped away
+        // from the app switcher), iOS ends the developer location session with
+        // the app, so the real location is already back. Start fresh instead
+        // of asking whether to resume or restore.
+        preferences.removeObject(forKey: Self.activeSessionRecoveryKey)
+        self.interruptedSession = nil
         self.deviceSession.tunnelHandoffApp = tunnelHandoffApp
         self.deviceSession.usesBuiltInTunnel = usesBuiltInTunnel
         self.deviceSession.backgroundKeepAlive.restoreIndicatorPreference(
