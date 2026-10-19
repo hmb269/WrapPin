@@ -196,6 +196,15 @@ final class LocalDeviceSessionCoordinator: NSObject {
     private var isProbingCachedService = false
 
     private var activeSession: OpaquePointer?
+    /// True once the current start reached `.active`. A later drop of the
+    /// developer connection (for example a proxy app resetting its tunnel when
+    /// mobile data comes back) then reconnects quietly instead of failing.
+    private var sessionReachedActive = false
+    private var isReconnecting = false
+    private var reconnectDeadline: Date?
+    private var reconnectLoopTask: Task<Void, Never>?
+    private var reconnectFailure: NativeLocationFailure?
+    private static let reconnectWindow: TimeInterval = 30
     private var activeRunIdentifier: UUID?
     private var workerIsRunning = false
     private var cancellationRequested = false
@@ -239,6 +248,8 @@ final class LocalDeviceSessionCoordinator: NSObject {
         restorationStatus = String(localized: "Not requested")
         didConfirmLocationClear = false
         vpnReturnRetryUsed = false
+        sessionReachedActive = false
+        endAutomaticReconnect()
 
 #if targetEnvironment(simulator)
         connectionStage = .failed
@@ -450,6 +461,7 @@ final class LocalDeviceSessionCoordinator: NSObject {
     // Retry once per start; never turn this into an unbounded recovery loop.
     private func showConnectionHelp() {
         guard pendingSession != nil, !workerIsRunning else { return }
+        if isReconnecting { return }
         // On mobile data a proxy app's tunnel is usually unreachable until the
         // radios are briefly off; go straight to that guidance.
         if mobileDataGuidance == .turnOff { return }
@@ -775,6 +787,10 @@ final class LocalDeviceSessionCoordinator: NSObject {
         mobileDataDiscoveryLoopTask?.cancel()
         mobileDataDiscoveryLoopTask = nil
         backgroundKeepAlive.start()
+        let wasReconnecting = isReconnecting
+        sessionReachedActive = true
+        endAutomaticReconnect()
+        if wasReconnecting { mobileDataGuidance = nil }
         phase = .active(target)
         connectionStage = .active
         if let event = retryTelemetry.becameActive() {
@@ -845,6 +861,10 @@ final class LocalDeviceSessionCoordinator: NSObject {
             phase = .idle
             connectionStage = .idle
         case .failure(let failure):
+            if sessionReachedActive, !failure.wasCancelled, pendingSession != nil {
+                continueAutomaticReconnect(after: failure)
+                return
+            }
             if failure.isRecoverable {
                 let stage = failure.stage ?? .locationUnknown
                 lastFailureStage = stage
@@ -1036,6 +1056,12 @@ final class LocalDeviceSessionCoordinator: NSObject {
             return
         }
 
+        if isReconnecting {
+            // The reconnect loop probes again on its own schedule.
+            serviceProbeAttemptCount = 0
+            return
+        }
+
         if !hasOpenedTunnelAppThisAttempt && !hasReachedDeviceTunnel {
             serviceProbeAttemptCount = 0
             handleTunnelUnavailable()
@@ -1095,6 +1121,8 @@ final class LocalDeviceSessionCoordinator: NSObject {
         pendingSession = nil
         resolvedService = nil
         backgroundKeepAlive.stop()
+        endAutomaticReconnect()
+        sessionReachedActive = false
         hasOpenedTunnelAppThisAttempt = false
         isMobileDataStartupMode = false
     }
@@ -1152,6 +1180,90 @@ final class LocalDeviceSessionCoordinator: NSObject {
             }
         }
 #endif
+    }
+
+    // MARK: Automatic reconnect
+
+    /// The developer connection dropped after the session was already active.
+    /// Keep the target and probe the last reached endpoint for a short window;
+    /// only report the original failure when that window runs out.
+    private func continueAutomaticReconnect(after failure: NativeLocationFailure) {
+        reconnectFailure = failure
+        let now = Date.now
+        if reconnectDeadline == nil {
+            reconnectDeadline = now.addingTimeInterval(Self.reconnectWindow)
+        }
+        guard let deadline = reconnectDeadline, now < deadline else {
+            giveUpAutomaticReconnect()
+            return
+        }
+
+        isReconnecting = true
+        resolvedService = nil
+        isMobileDataStartupMode = false
+        mobileDataGuidance = nil
+        hasReachedDeviceTunnel = true
+        // Keep WrapPin alive in the background while it reconnects.
+        backgroundKeepAlive.start()
+        phase = .discovering
+        connectionStage = .discoveringDevice
+
+        guard reconnectLoopTask == nil else { return }
+        reconnectLoopTask = Task { @MainActor [weak self] in
+            // Give the tunnel app a moment to bring its tunnel back up.
+            try? await Task.sleep(for: .milliseconds(800))
+            while !Task.isCancelled {
+                guard
+                    let self,
+                    self.isReconnecting,
+                    self.pendingSession != nil
+                else { return }
+                if let deadline = self.reconnectDeadline, Date.now >= deadline {
+                    self.reconnectLoopTask = nil
+                    if !self.workerIsRunning { self.giveUpAutomaticReconnect() }
+                    return
+                }
+                if !self.workerIsRunning, self.phase == .discovering, self.resolvedService == nil {
+                    self.beginDiscovery(reportTimeout: false)
+                    if
+                        self.serviceProbeConnection == nil,
+                        let cached = self.cachedServiceForPendingSession()
+                    {
+                        // Probe the saved endpoint straight away; Bonjour may not
+                        // work through the proxy tunnel on mobile data.
+                        self.cachedServiceProbeTask?.cancel()
+                        self.cachedServiceProbeTask = nil
+                        self.isProbingCachedService = true
+                        self.connectionStage = .verifyingDevice
+                        self.verifyServiceIsReachable(cached)
+                    }
+                }
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    private func giveUpAutomaticReconnect() {
+        let failure = reconnectFailure
+        endAutomaticReconnect()
+        sessionReachedActive = false
+        let message = NSLocalizedString(
+            failure?.message ?? "The iPhone ended the active location session.",
+            comment: ""
+        )
+        mobileDataGuidance = nil
+        clearPendingSession()
+        enterFailedPhase(message, stage: failure?.stage ?? .locationActiveWrite)
+        connectionStage = .failed
+        lastFailureMessage = message
+    }
+
+    private func endAutomaticReconnect() {
+        reconnectLoopTask?.cancel()
+        reconnectLoopTask = nil
+        isReconnecting = false
+        reconnectDeadline = nil
+        reconnectFailure = nil
     }
 
     private func routeStartupForCurrentNetwork() {
@@ -1255,6 +1367,7 @@ final class LocalDeviceSessionCoordinator: NSObject {
     }
 
     private func handleTunnelUnavailable() {
+        if isReconnecting { return }
         if mobileDataGuidance == .turnOff { return }
         if prefersAirplaneModeGuidance {
             enterMobileDataGuidance()
